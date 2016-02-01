@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from __future__ import division
+from math import copysign
+
 from collections import deque, defaultdict, OrderedDict
 
 import pandas as pd
@@ -206,7 +208,7 @@ def extract_round_trips(transactions, groupby=groupby_consecutive,
 
                 for price in indiv_prices:
                     if len(price_stack) != 0 and \
-                       (np.sign(price_stack[-1]) != np.sign(price)):
+                       (copysign(1, price_stack[-1]) != copysign(1, price)):
                         # Retrieve last dt, stock-price pair from
                         # stack
                         prev_price = price_stack.pop()
@@ -214,7 +216,7 @@ def extract_round_trips(transactions, groupby=groupby_consecutive,
 
                         pnl += -(price + prev_price)
                         cur_open_dts.append(prev_dt)
-                        invested += np.abs(prev_price)
+                        invested += abs(prev_price)
 
                     else:
                         # Push additional stock-prices onto stack
