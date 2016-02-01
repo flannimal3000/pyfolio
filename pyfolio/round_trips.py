@@ -184,12 +184,11 @@ def extract_round_trips(transactions, groupby=groupby_consecutive,
     """
 
     transactions = groupby(transactions)
-    port_stack = defaultdict(deque)
     roundtrips = []
 
     for sym, trans_sym in transactions.groupby('symbol'):
         trans_sym = trans_sym.sort_index()
-        sym_stack = port_stack[sym]
+        sym_stack = []
 
         for dt, t in trans_sym.iterrows():
             signed_price = t.price * np.sign(t.amount)
@@ -203,7 +202,6 @@ def extract_round_trips(transactions, groupby=groupby_consecutive,
                 # Close round-trip
                 pnl = 0
                 invested = 0
-                cur_durations = []
                 cur_open_dts = []
 
                 for price in indiv_prices:
@@ -214,7 +212,6 @@ def extract_round_trips(transactions, groupby=groupby_consecutive,
                         prev_dt, prev_price = sym_stack.pop()
 
                         pnl += -(price + prev_price)
-                        cur_durations.append(dt - prev_dt)
                         cur_open_dts.append(prev_dt)
                         invested += np.abs(prev_price)
 
@@ -223,7 +220,6 @@ def extract_round_trips(transactions, groupby=groupby_consecutive,
                         sym_stack.append((dt, price))
 
                 roundtrips.append({'pnl': pnl,
-                                   'duration': np.median(cur_durations),
                                    'open_dt': cur_open_dts[len(cur_open_dts) //
                                                            2],
                                    'close_dt': dt,
@@ -233,7 +229,8 @@ def extract_round_trips(transactions, groupby=groupby_consecutive,
                                    })
 
     roundtrips = pd.DataFrame(roundtrips)
-
+    roundtrips['duration'] = roundtrips['close_dt'] - \
+                             roundtrips['open_dt']
     if portfolio_value is not None:
         # Need to normalize so that we can join
         pv = pd.DataFrame(portfolio_value,
