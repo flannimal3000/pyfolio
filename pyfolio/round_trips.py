@@ -69,18 +69,18 @@ def agg_all_long_short(round_trips, col, stats_dict):
         .groupby('ones')[col]\
         .agg(stats_dict)\
         .T\
-        .rename_axis({1.0: 'All round_trips'},
+        .rename_axis({1.0: 'All trades'},
                      axis='columns')
     stats_long_short = round_trips.groupby('long')[col]\
         .agg(stats_dict)\
         .T\
-        .rename_axis({False: 'Short round_trips',
-                      True: 'Long round_trips'},
+        .rename_axis({False: 'Short trades',
+                      True: 'Long trades'},
                      axis='columns')
 
-    return stats_all.join(stats_long_short)[['All round_trips',
-                                             'Long round_trips',
-                                             'Short round_trips']]
+    return stats_all.join(stats_long_short)[['All trades',
+                                             'Long trades',
+                                             'Short trades']]
 
 
 def groupby_consecutive(txn, max_delta=pd.Timedelta('8h')):
