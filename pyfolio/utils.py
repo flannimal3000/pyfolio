@@ -470,3 +470,22 @@ def get_symbol_rets(symbol, start=None, end=None):
     return SETTINGS['returns_func'](symbol,
                                     start=start,
                                     end=end)
+
+
+def print_table(table, name=None, fmt=None):
+    if fmt is not None:
+        prev_option = pd.get_option('display.float_format')
+        pd.set_option('display.float_format', lambda x: fmt.format(x))
+
+    if name is not None:
+        table.columns.name = name
+
+    try:
+        get_ipython()
+        from IPython.display import display, HTML
+        display(HTML(table.to_html()))
+    except:
+        print(table)
+
+    if fmt is not None:
+        pd.set_option('display.float_format', prev_option)
