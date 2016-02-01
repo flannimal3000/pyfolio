@@ -188,16 +188,16 @@ def extract_round_trips(transactions, groupby=groupby_consecutive,
 
     for sym, trans_sym in transactions.groupby('symbol'):
         trans_sym = trans_sym.sort_index()
-        sym_stack = []
-
+        price_stack = []
+        dt_stack = []
         for dt, t in trans_sym.iterrows():
             signed_price = t.price * np.sign(t.amount)
             abs_amount = int(abs(t.amount))
             indiv_prices = [signed_price] * abs_amount
-            if (len(sym_stack) == 0) or \
-                    (np.sign(sym_stack[-1][1]) == np.sign(t.amount)):
-                for price in indiv_prices:
-                    sym_stack.append((dt, price))
+            if (len(price_stack) == 0) or \
+                    (np.sign(price_stack[-1]) == np.sign(t.amount)):
+                price_stack.extend(indiv_prices)
+                dt_stack.extend([dt] * len(indiv_prices))
             else:
                 # Close round-trip
                 pnl = 0
@@ -205,11 +205,12 @@ def extract_round_trips(transactions, groupby=groupby_consecutive,
                 cur_open_dts = []
 
                 for price in indiv_prices:
-                    if len(sym_stack) != 0 and \
-                       (np.sign(sym_stack[-1][1]) != np.sign(price)):
+                    if len(price_stack) != 0 and \
+                       (np.sign(price_stack[-1]) != np.sign(price)):
                         # Retrieve last dt, stock-price pair from
                         # stack
-                        prev_dt, prev_price = sym_stack.pop()
+                        prev_price = price_stack.pop()
+                        prev_dt = dt_stack.pop()
 
                         pnl += -(price + prev_price)
                         cur_open_dts.append(prev_dt)
@@ -217,9 +218,11 @@ def extract_round_trips(transactions, groupby=groupby_consecutive,
 
                     else:
                         # Push additional stock-prices onto stack
-                        sym_stack.append((dt, price))
+                        price_stack.append(price)
+                        dt_stack.append(dt)
 
                 roundtrips.append({'pnl': pnl,
+                                   #'duration': np.median(cur_durations),
                                    'open_dt': cur_open_dts[len(cur_open_dts) //
                                                            2],
                                    'close_dt': dt,
@@ -229,8 +232,9 @@ def extract_round_trips(transactions, groupby=groupby_consecutive,
                                    })
 
     roundtrips = pd.DataFrame(roundtrips)
-    roundtrips['duration'] = roundtrips['close_dt'] - \
-                             roundtrips['open_dt']
+
+    roundtrips['duration'] = roundtrips['close_dt'] - roundtrips['open_dt']
+
     if portfolio_value is not None:
         # Need to normalize so that we can join
         pv = pd.DataFrame(portfolio_value,
