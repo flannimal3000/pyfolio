@@ -193,11 +193,13 @@ def extract_round_trips(transactions, groupby=groupby_consecutive,
         price_stack = []
         dt_stack = []
         for dt, t in trans_sym.iterrows():
+            if t.price < 0:
+               raise ValueError('Negative price detected.')
             signed_price = t.price * np.sign(t.amount)
             abs_amount = int(abs(t.amount))
             indiv_prices = [signed_price] * abs_amount
             if (len(price_stack) == 0) or \
-                    (np.sign(price_stack[-1]) == np.sign(t.amount)):
+               (copysign(1, price_stack[-1]) == copysign(1, t.amount)):
                 price_stack.extend(indiv_prices)
                 dt_stack.extend([dt] * len(indiv_prices))
             else:
