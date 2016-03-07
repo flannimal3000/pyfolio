@@ -910,24 +910,24 @@ def show_and_plot_top_positions(returns, positions_alloc,
     if show_and_plot == 1 or show_and_plot == 2:
         print("\n")
         print('Top 10 long positions of all time (and max%)')
-        print(pd.DataFrame(df_top_long).index.values)
+        print([str(sym) for sym in df_top_long.index.values])
         print(np.round(pd.DataFrame(df_top_long)[0].values, 3))
         print("\n")
 
         print('Top 10 short positions of all time (and max%)')
-        print(pd.DataFrame(df_top_short).index.values)
+        print([str(sym) for sym in df_top_short.index.values])
         print(np.round(pd.DataFrame(df_top_short)[0].values, 3))
         print("\n")
 
         print('Top 10 positions of all time (and max%)')
-        print(pd.DataFrame(df_top_abs).index.values)
+        print([str(sym) for sym in df_top_abs.index.values])
         print(np.round(pd.DataFrame(df_top_abs)[0].values, 3))
         print("\n")
 
         _, _, df_top_abs_all = pos.get_top_long_short_abs(
             positions_alloc, top=9999)
         print('All positions ever held')
-        print(pd.DataFrame(df_top_abs_all).index.values)
+        print([str(sym) for sym in df_top_abs_all.index.values])
         print(np.round(pd.DataFrame(df_top_abs_all)[0].values, 3))
         print("\n")
 
