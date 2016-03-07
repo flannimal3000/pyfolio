@@ -82,14 +82,14 @@ def get_portfolio_size_constraints(vol_analysis, daily_vol_limit=0.2):
     """
     constraints = pd.DataFrame()
     constraints['max_capacity_at_ADTV'] = np.round(
-        (vol_analysis['avg_daily_dv_$mm'] * daily_vol_limit)
-        / vol_analysis.algo_max_exposure, 2)
+        (vol_analysis['avg_daily_dv_$mm'] * daily_vol_limit) /
+        vol_analysis.algo_max_exposure, 2)
     constraints['max_capacity_at_10th%'] = np.round(
-        (vol_analysis['10th_%_daily_dv_$mm'] * daily_vol_limit)
-        / vol_analysis.algo_max_exposure, 2)
+        (vol_analysis['10th_%_daily_dv_$mm'] * daily_vol_limit) /
+        vol_analysis.algo_max_exposure, 2)
     constraints['max_capacity_at_90th%'] = np.round(
-        (vol_analysis['90th_%_daily_dv_$mm'] * daily_vol_limit)
-        / vol_analysis.algo_max_exposure, 2)
+        (vol_analysis['90th_%_daily_dv_$mm'] * daily_vol_limit) /
+        vol_analysis.algo_max_exposure, 2)
 
     constraints.sort('max_capacity_at_ADTV')
 
@@ -115,7 +115,6 @@ def get_constraining_tickers(constraints):
 
     constraint_tickers = pd.DataFrame()
     for name, d in constraints.dropna(axis=0).iteritems():
-        const = d.min()
         constraint_tickers.loc[name, 'Algo Capacity $ Millions'] = d.min()
         constraint_tickers.loc[name, 'Constraining Ticker'] = d.argmin()
 
@@ -157,9 +156,10 @@ def daily_txns_with_bar_data(transactions, market_data):
 def apply_slippage_penalty(returns, txn_daily, simulate_starting_capital,
                            backtest_starting_capital, impact=0.1):
     """
-    Applies quadratic volumeshare slippage model to daily return based on the proportion of
-    the observed historical daily bar dollar volume consumed by the strategy's trades. Scales
-    the size of trades based on the ratio of the starting capital we wish to test to the starting
+    Applies quadratic volumeshare slippage model to daily return based
+    on the proportion of the observed historical daily bar dollar volume
+    consumed by the strategy's trades. Scales the size of trades based
+    on the ratio of the starting capital we wish to test to the starting
     capital of the passed backtest data.
 
     Parameters
@@ -167,12 +167,12 @@ def apply_slippage_penalty(returns, txn_daily, simulate_starting_capital,
     returns : pd.Series
         Time series of daily returns.
     txn_daily : pd.Series
-        Daily transaciton totals, closing price, and daily volume for each traded name.
-        See price_volume_daily_txns for more details.
+        Daily transaciton totals, closing price, and daily volume for 
+        each traded name. See price_volume_daily_txns for more details.
     simulate_starting_capital : integer
         capital at which we want to test
-    backtest_starting_capital: capital base at which backtest was origionally run at.
-        impact: See Zipline volumeshare slippage model
+    backtest_starting_capital: capital base at which backtest was 
+        origionally run. impact: See Zipline volumeshare slippage model
 
     Returns
     -------
@@ -189,15 +189,13 @@ def apply_slippage_penalty(returns, txn_daily, simulate_starting_capital,
     daily_penalty = penalties.resample('D', how='sum')
     daily_penalty = daily_penalty.reindex(returns.index).fillna(0)
 
-    # Since we are scaling the numerator of the penalties linearly by capital base, it makes
-    # the most sense to scale the denominator similarly. In other words, since we aren't applying
-    # compounding to simulate_traded_shares, we shouldn't apply compounding to
-    # pv.
+    # Since we are scaling the numerator of the penalties linearly 
+    #by capital base, it makes the most sense to scale the denominator 
+    #similarly. In other words, since we aren't applying compounding to 
+    #simulate_traded_shares, we shouldn't apply compounding to pv.
     pv = timeseries.cum_returns(
         returns, starting_value=backtest_starting_capital) * mult
 
-    # I think we have to apply the penalty to returns rather than portfolio value to account
-    # for compounding.
     adj_returns = returns - (daily_penalty / pv)
 
     return adj_returns
