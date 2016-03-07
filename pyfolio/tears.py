@@ -53,6 +53,7 @@ def timer(msg_body, previous_time):
 def create_full_tear_sheet(returns,
                            positions=None,
                            transactions=None,
+                           market_data=None,
                            benchmark_rets=None,
                            gross_lev=None,
                            slippage=None,
@@ -103,6 +104,10 @@ def create_full_tear_sheet(returns,
             2004-01-09 12:18:01    483      324.12   'AAPL'
             2004-01-09 12:18:01    122      83.10    'MSFT'
             2004-01-13 14:12:23    -75      340.43   'AAPL'
+    market_data : pd.Panel, optional
+        Panel containing open, high, low, close, and volume DataFrames.
+        Each of these market data DataFrames should have the same axes
+        as the passed positions DataFrame (same dates and symbols).
     gross_lev : pd.Series, optional
         The leverage of a strategy.
          - Time series of the sum of long and short exposure per share
@@ -184,6 +189,11 @@ def create_full_tear_sheet(returns,
                     positions=positions,
                     transactions=transactions,
                     sector_mappings=sector_mappings)
+
+            if market_data is not None:
+                create_capacity_tear_sheet(returns, positions, transactions,
+                                           market_data, daily_vol_limit=0.2,
+                                           last_n_days=125)
 
     if bayesian:
         create_bayesian_tear_sheet(returns,
