@@ -28,6 +28,7 @@ from . import utils
 from . import pos
 from . import txn
 from . import round_trips
+from . import capacity
 from . import plotting
 from . import _seaborn as sns
 from .plotting import plotting_context
@@ -667,23 +668,84 @@ def create_interesting_times_tear_sheet(
     if return_fig:
         return fig
 
+
 @plotting_context
-def create_capacity_tear_sheet(returns, positions, transactions, market_data):
-    vol_analysis = capacity.get_hold_time_dollar_volume(positions, market_data)
+def create_capacity_tear_sheet(returns, positions, transactions, market_data,
+                               daily_vol_limit=0.2, last_n_days=125):
+    """
+    Generates a report detailing portfolio size constraints set by least liquid tickers.
+    Plots a "capacity sweep," a curve describing projected sharpe ratio given the slippage
+    penalties that are applied at various capital bases.
 
-    display(vol_analysis.sort('algo_max_exposure_pct', ascending=False).head())
+    Parameters
+    ----------
+    returns : pd.Series
+        Daily returns of the strategy, noncumulative.
+         - See full explanation in create_full_tear_sheet.
+    positions : pd.DataFrame
+        Daily net position values.
+         - See full explanation in create_full_tear_sheet.
+    transactions : pd.DataFrame
+        Prices and amounts of executed trades. One row per trade.
+         - See full explanation in create_full_tear_sheet.
+    market_data : pd.Panel
+        Contains OHLCV DataFrames for the tickers in the passed
+        positions DataFrames
+    daily_vol_limit : float
+        Max proportion of any daily bar that the startegy is allowed to
+        consume in the constraining ticker analysis.
+    last_n_days : integer
+        Compute max position allocation and dollar volume for only
+        the last N days of the backtest
+    """
 
-    print('Most Liquid Names:')
-    display(vol_analysis.sort('avg_daily_dollar_volume', ascending=False).head(5))
-    print('Least Liquid Names:')
-    display(vol_analysis.sort('avg_daily_dollar_volume', ascending=True).head(8))
+    whole_bt = capacity.get_assets_dollar_volume(positions,
+                                                 market_data,
+                                                 only_held_days=True)
+    n_days = capacity.get_assets_dollar_volume(positions,
+                                               market_data,
+                                               only_held_days=True,
+                                               last_n_days=last_n_days)
+    for title, data in [('Whole backtest', whole_bt),
+                        ('Last six months:', n_days)]:
+        print(title)
+        print('Most Liquid Names:')
+        utils.print_table(
+            data.sort('avg_daily_dv_$mm', ascending=False).head(5))
+        print('Least Liquid Names:')
+        utils.print_table(
+            data.sort('avg_daily_dv_$mm', ascending=True).head(8))
 
-    constraint_tickers = pd.DataFrame()
-    for name, d in constraints.dropna(axis=0).iteritems():
-        const = d.min()
-        constraint_tickers.loc[name, 'Algo Capacity $ Millions'] = d.min()
-        constraint_tickers.loc[name, 'Constraining Ticker'] = d.argmin()
-    display(constraint_tickers)
+        constraints = capacity.get_portfolio_size_constraints(
+            data, daily_vol_limit=daily_vol_limit)
+        constraining_tickers = capacity.get_constraining_tickers(constraints)
+        print("Max capacity at %s%% pct daily bar consumption limit" %
+              (daily_vol_limit * 100))
+        utils.print_table(constraining_tickers)
+
+    illiquid = whole_bt[whole_bt['avg_daily_dv_$mm'] < 1]
+    if len(illiquid) > 0:
+        fig = plt.figure(figsize=(14, 2 * 6))
+        gs = gridspec.GridSpec(2, 1, wspace=0.5, hspace=0.5)
+        ax_illiquid = plt.subplot(gs[0, :])
+        ax_capacity_sweep = plt.subplot(gs[1, :])
+
+        pos_alloc = pos.get_percent_alloc(positions)
+        (pos_alloc[illiquid.index.values] * 100).plot(ax=ax_illiquid)
+        ax_illiquid.set(ylabel='Portfolio Allocation (%)',
+                        xlabel='',
+                        title='Holdings with Less than $1mm ADTV')
+    else:
+        fig, ax_capacity_sweep = plt.subplots(figsize=(14, 6))
+
+    daily_txn = capacity.daily_txns_with_bar_data(transactions, market_data)
+    bt_starting_capital = positions.iloc[0].sum() / (1 + returns.iloc[0])
+    plotting.plot_capacity_sweep(returns, daily_txn, bt_starting_capital,
+                                 min_pv=100000,
+                                 max_pv=300000000,
+                                 step_size=1000000,
+                                 ax=ax_capacity_sweep)
+
 
 @plotting_context
 def create_bayesian_tear_sheet(returns, benchmark_rets=None,
