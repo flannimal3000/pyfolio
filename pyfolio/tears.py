@@ -680,12 +680,14 @@ def create_interesting_times_tear_sheet(
 
 
 @plotting_context
-def create_capacity_tear_sheet(returns, positions, transactions, market_data,
+def create_capacity_tear_sheet(returns, positions, transactions, 
+                               market_data,
                                daily_vol_limit=0.2, last_n_days=125):
     """
-    Generates a report detailing portfolio size constraints set by least liquid tickers.
-    Plots a "capacity sweep," a curve describing projected sharpe ratio given the slippage
-    penalties that are applied at various capital bases.
+    Generates a report detailing portfolio size constraints set by
+    least liquid tickers. Plots a "capacity sweep," a curve describing
+    projected sharpe ratio given the slippage penalties that are
+    applied at various capital bases.
 
     Parameters
     ----------

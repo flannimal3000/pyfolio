@@ -167,11 +167,11 @@ def apply_slippage_penalty(returns, txn_daily, simulate_starting_capital,
     returns : pd.Series
         Time series of daily returns.
     txn_daily : pd.Series
-        Daily transaciton totals, closing price, and daily volume for 
+        Daily transaciton totals, closing price, and daily volume for
         each traded name. See price_volume_daily_txns for more details.
     simulate_starting_capital : integer
         capital at which we want to test
-    backtest_starting_capital: capital base at which backtest was 
+    backtest_starting_capital: capital base at which backtest was
         origionally run. impact: See Zipline volumeshare slippage model
 
     Returns
@@ -189,10 +189,10 @@ def apply_slippage_penalty(returns, txn_daily, simulate_starting_capital,
     daily_penalty = penalties.resample('D', how='sum')
     daily_penalty = daily_penalty.reindex(returns.index).fillna(0)
 
-    # Since we are scaling the numerator of the penalties linearly 
-    #by capital base, it makes the most sense to scale the denominator 
-    #similarly. In other words, since we aren't applying compounding to 
-    #simulate_traded_shares, we shouldn't apply compounding to pv.
+    # Since we are scaling the numerator of the penalties linearly
+    # by capital base, it makes the most sense to scale the denominator
+    # similarly. In other words, since we aren't applying compounding to
+    # simulate_traded_shares, we shouldn't apply compounding to pv.
     pv = timeseries.cum_returns(
         returns, starting_value=backtest_starting_capital) * mult
 
