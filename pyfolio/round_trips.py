@@ -14,7 +14,7 @@
 # limitations under the License.
 from __future__ import division
 from math import copysign
-
+import warnings
 from collections import deque, defaultdict, OrderedDict
 
 import pandas as pd
@@ -85,7 +85,7 @@ def agg_all_long_short(round_trips, col, stats_dict):
                                              'Short trades']]
 
 
-def groupby_consecutive(txn, max_delta=pd.Timedelta('8h')):
+def _groupby_consecutive(txn, max_delta=pd.Timedelta('8h')):
     """Merge transactions of the same direction separated by less than
     max_delta time duration.
 
@@ -106,6 +106,9 @@ def groupby_consecutive(txn, max_delta=pd.Timedelta('8h')):
 
     """
     def vwap(transaction):
+        if transaction.amount.sum() == 0:
+            warnings.warn('Zero transacted shares, setting vwap to nan.')
+            return np.nan
         return (transaction.amount * transaction.price).sum() / \
             transaction.amount.sum()
 
@@ -137,7 +140,7 @@ def groupby_consecutive(txn, max_delta=pd.Timedelta('8h')):
     return out
 
 
-def extract_round_trips(transactions, groupby=groupby_consecutive,
+def extract_round_trips(transactions,
                         portfolio_value=None):
     """Group transactions into "round trips". First, transactions are
     grouped by day and directionality. Then, long and short
@@ -185,7 +188,7 @@ def extract_round_trips(transactions, groupby=groupby_consecutive,
         into that partiulcar round-trip.
     """
 
-    transactions = groupby(transactions)
+    transactions = _groupby_consecutive(transactions)
     roundtrips = []
 
     for sym, trans_sym in transactions.groupby('symbol'):
