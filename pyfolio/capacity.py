@@ -7,120 +7,6 @@ from . import timeseries
 DISPLAY_UNIT = 1000000
 
 
-def get_assets_dollar_volume(positions, market_data,
-                             only_held_days=True, last_n_days=None):
-    """
-    Computes descriptive statsitics for the daily dollar
-    volume for traded names over the backtest dates.
-
-    Parameters
-    ----------
-    positions: pd.DataFrame
-        Contains daily position values including cash
-        - See full explanation in tears.create_full_tear_sheet
-    market_data : pd.Panel
-        Contains OHLCV DataFrames for the tickers in the passed
-        positions DataFrame
-    only_held_days : boolean
-        Only compute daily dollar volume statistics on days when
-        a name was held in the portfolio.
-    last_n_days : integer, optional
-        Compute max position allocation and dollar volume for only
-        the last N days of the backtest
-
-    Returns
-    -------
-    vol_analysis : pd.DataFrame
-        Index of traded tickers. Columns for 10th percentile, 90th percentile,
-        and mean daily traded volume, as well as max position concentration.
-    """
-    DV = market_data['volume'] * market_data['price']
-
-    positions_alloc = pos.get_percent_alloc(positions)
-    positions_alloc = positions_alloc.drop('cash', axis=1)
-
-    if last_n_days is not None:
-        positions_alloc = positions_alloc.iloc[-last_n_days:]
-        DV = DV.iloc[-last_n_days:]
-
-    if only_held_days:
-        for name, ts in positions_alloc.iteritems():
-            DV[name] = DV.loc[ts[ts != 0].index, name]
-
-    max_exposure_per_ticker = abs(positions_alloc).max()
-
-    vol_analysis = pd.DataFrame()
-    vol_analysis['algo_max_exposure'] = max_exposure_per_ticker
-    vol_analysis.loc[:, 'avg_daily_dv_$mm'] = np.round(
-        DV.mean() / DISPLAY_UNIT, 2)
-    vol_analysis['10th_%_daily_dv_$mm'] = np.round(DV.apply(
-        lambda x: np.nanpercentile(x, 10)) / DISPLAY_UNIT, 2)
-    vol_analysis['90th_%_daily_dv_$mm'] = np.round(DV.apply(
-        lambda x: np.nanpercentile(x, 90)) / DISPLAY_UNIT, 2)
-
-    return vol_analysis
-
-
-def get_portfolio_size_constraints(vol_analysis, daily_vol_limit=0.2):
-    """
-    Finds max portfolio size at daily volume limit given at different
-    slices of daily dollar volume distributions.
-
-    Parameters
-    ----------
-    vol_analysis : pd.DataFrame
-        See output of get_assets_dollar_volume
-    daily_vol_limit : float
-        Max proportion of any daily bar that the startegy is allowed to
-        consume.
-
-    Returns
-    -------
-    constraint_tickers : pd.DataFrame
-        Algo capacity and constraining ticker at various parts of
-        daily volume distribution.
-    """
-    constraints = pd.DataFrame()
-    constraints['max_capacity_at_ADTV'] = np.round(
-        (vol_analysis['avg_daily_dv_$mm'] * daily_vol_limit) /
-        vol_analysis.algo_max_exposure, 2)
-    constraints['max_capacity_at_10th%'] = np.round(
-        (vol_analysis['10th_%_daily_dv_$mm'] * daily_vol_limit) /
-        vol_analysis.algo_max_exposure, 2)
-    constraints['max_capacity_at_90th%'] = np.round(
-        (vol_analysis['90th_%_daily_dv_$mm'] * daily_vol_limit) /
-        vol_analysis.algo_max_exposure, 2)
-
-    constraints.sort('max_capacity_at_ADTV')
-
-    return constraints
-
-
-def get_constraining_tickers(constraints):
-    """
-    Finds most constraining tickers at different dollar volume
-    descriptive statsitics
-
-    Parameters
-    ----------
-    constraints : pd.DataFrame
-        See output of get_portfolio_size_constraints
-
-    Returns
-    -------
-    constraint_tickers : pd.DataFrame
-        Algo capacity and constraining ticker at various parts of
-        daily volume distribution.
-    """
-
-    constraint_tickers = pd.DataFrame()
-    for name, d in constraints.dropna(axis=0).iteritems():
-        constraint_tickers.loc[name, 'Algo Capacity $ Millions'] = d.min()
-        constraint_tickers.loc[name, 'Constraining Ticker'] = d.argmin()
-
-    return constraint_tickers
-
-
 def daily_txns_with_bar_data(transactions, market_data):
     """
     Sums the absolute value of shares traded in each name on each day.
@@ -151,6 +37,88 @@ def daily_txns_with_bar_data(transactions, market_data):
     txn_daily = txn_daily.reset_index().set_index('date')
 
     return txn_daily
+
+
+def days_to_liquidate_positions(positions, market_data, 
+                                max_bar_consumption=0.2,
+                                capital_base=1e6,
+                                mean_volume_window=5):
+    """Compute the number of days that would have been required
+    to fully liquidate each position on each day based on the
+    trailing n day mean daily bar volume and a limit on the proportion
+    of a daily bar that we are allowed to consume. 
+
+    This analysis uses portfolio allocations and a provided capital base
+    rather than the dollar values in the positions DataFrame to remove the
+    effect of compounding on days to liquidate. In other words, this function
+    assumes that the net liquidation portfolio value will always remain
+    constant at capital_base.
+
+    Parameters
+    ----------
+    positions: pd.DataFrame
+        Contains daily position values including cash
+        - See full explanation in tears.create_full_tear_sheet
+    market_data : pd.Panel
+        Contains OHLCV DataFrames for the tickers in the passed
+        positions DataFrame
+    max_bar_consumption : float
+        Max proportion of a daily bar that can be consumed in the
+        process of liquidating a position.
+    capital_base : integer
+        Capital base multiplied by portfolio allocation to compute
+        position value that needs liquidating.
+    mean_volume_window : float
+        Trailing window to use in mean volume calculation.
+
+    Returns
+    -------
+    days_to_liquidate : pd.DataFrame
+        Number of days required to fully liquidate daily positions.
+        Datetime index, symbols as columns.
+
+    """
+ 
+    DV = market_data['volume'] * market_data['price']
+    roll_mean_dv = pd.rolling_mean(DV, mean_volume_window)
+
+    positions_alloc = pos.get_percent_alloc(positions)
+    positions_alloc = positions_alloc.drop('cash', axis=1)
+
+    days_to_liquidate = (positions_alloc * capital_base) / \
+        (max_bar_consumption * roll_mean_dv)
+
+    return days_to_liquidate
+
+
+def get_max_days_to_liquidate_by_ticker(positions, days_to_liquidate):
+
+    positions_alloc = pos.get_percent_alloc(positions)
+    positions_alloc = positions_alloc.drop('cash', axis=1)
+    longest_liq_each_ticker_ix = days_to_liquidate.idxmax(axis=0).dropna()
+
+    worst_liq = pd.DataFrame()
+    for ticker, date in longest_liq_each_ticker_ix.iteritems():
+        worst_liq.loc[ticker, 'date'] = date
+        worst_liq.loc[ticker, 'portfolio_allocation_%'] = positions_alloc.loc[
+            date, ticker] * 100
+        worst_liq.loc[ticker, 'days_to_liquidate'] = days_to_liquidate.loc[
+            date, ticker]
+    worst_liq.index.name = 'symbol'
+
+    return worst_liq.reset_index()
+
+
+def get_low_liquidity_transactions(txn_daily, market_data):
+    def max_consumption_txn_row(x):
+        max_pbc = x['max_pct_bar_consumed'].max()
+        return x[x['max_pct_bar_consumed'] == max_pbc].iloc[:1]
+    
+    max_bar_consumption = txn_daily.assign(
+        max_pct_bar_consumed=txn_daily.amount/txn_daily.volume
+        ).groupby('symbol').apply(max_consumption_txn_row)
+
+    return max_bar_consumption[['max_pct_bar_consumed']].reset_index()
 
 
 def apply_slippage_penalty(returns, txn_daily, simulate_starting_capital,
